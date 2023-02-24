@@ -140,6 +140,7 @@ def RRT(TreeSizeMax, file1="ScatteredNodes", file2="cylinders2"):
                     Ynew = Ynearest + planner([Xnearest, Ynearest], [Xrandom, Yrandom]) * (Yrandom - Ynearest) / dist
                     """New coordinates of the added node on the graph when it has been created after a collision"""
                     TreeNodes.append(number)
+                    NoLinks.append((rd, number))
                     positions.append((Xnew, Ynew))
                     for cell in range(len(Tree)):
                         T = []
