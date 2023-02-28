@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 
 
-with open('Xerr1.csv', newline='') as file:
+with open('Xerr.csv', newline='') as file:
     Xerr = []
     ind = []
     j = 0

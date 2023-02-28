@@ -156,8 +156,8 @@ F6 = np.concatenate((pre_F6, M2), axis=0)
 print("F6\n", F6, "\n")
 
 k = 1
-Kp = np.diag(k * np.ones(6))
-q = 5
+Kp = np.diag(k * np.ones(6))              # [1, 15] for overshoot with error
+q = 15                                    # [5, 3] else
 Ki = np.diag(q * np.ones(6))
 
 Blist = np.array([[0, 0, 1, 0, 0.033, 0],
@@ -174,12 +174,12 @@ config = init_config
 print("init_e Full_Thetalist", Full_thetalist, "\n")
 gripper_state = 0
 Xerrs = []
-Configs = np.zeros((int(len(Trajectory) // 6), 13))
+Configs = np.zeros((int(len(Trajectory)), 13))
 Configs[0][:] = config
 delta_t = 0.01
 Int_error = [0, 0, 0, 0, 0, 0]
 """Here I just wanted to keep the first portion of the trajectory (Robot moving to the object"""
-for i in range(int(len(Trajectory) // 6) - 1):
+for i in range(int(len(Trajectory)) - 1):
     M = Trajectory[i + 1]
     TsedNext = np.array([[M[0], M[1], M[2], M[9]],
                         [M[3], M[4], M[5], M[10]],
@@ -239,14 +239,14 @@ print('Tse bis\n', Tsb @ (Tb0 @ T0e))
 
 '''Here we have our final Tse, Tsed, config and thetalist after the first part of trajectory'''
 
-with open('Xerr1.csv', 'w', newline='') as file1:
+with open('Xerr.csv', 'w', newline='') as file1:
     writer1 = csv.writer(file1)
-    for i in range(int(len(Trajectory) // 6) - 1):
+    for i in range(int(len(Trajectory)) - 1):
         writer1.writerow([Xerrs[i][0], Xerrs[i][1], Xerrs[i][2], Xerrs[i][3], Xerrs[i][4], Xerrs[i][5]])
 
-with open('Configurations1.csv', 'w', newline='') as file2:
+with open('Configurations.csv', 'w', newline='') as file2:
     writer2 = csv.writer(file2)
-    for i in range(int(len(Trajectory) // 6) - 1):
+    for i in range(int(len(Trajectory)) - 1):
         writer2.writerow([Configs[i][0], Configs[i][1], Configs[i][2], Configs[i][3], Configs[i][4], Configs[i][5],
                           Configs[i][6], Configs[i][7], Configs[i][8], Configs[i][9], Configs[i][10], Configs[i][11],
                           Configs[i][12]])

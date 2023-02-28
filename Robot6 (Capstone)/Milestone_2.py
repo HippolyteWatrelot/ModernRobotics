@@ -138,15 +138,13 @@ def Full_Trajectory(Tse, Tsc, TscFinal, TceGrasp, TceStandoff, k=1, time=30):
     Tse, Trajectory = RTG_decoupled(Tse, TseStandoff, Trajectory, k, time, gripper_state)
     #Tse, Trajectory = RTG_decoupled_5(Tse, TseStandoff, Trajectory, k, time, gripper_state)
     """Step 5"""
-    TseFinalStandoff = TscFinal + np.array([[0, 0, 0, TceStandoff[0, 3]], [0, 0, 0, TceStandoff[1, 3]],
-                                            [0, 0, 0, TceStandoff[2, 3]], [0, 0, 0, 0]])
+    TseFinalStandoff = TscFinal @ TceStandoff
     print('TseFinalStandoff\n', TseFinalStandoff)
     Tse, Trajectory = RTG_Screw_path(Tse, TseFinalStandoff, Trajectory, k, time, gripper_state)
     #Tse, Trajectory = RTG_Poly5_path(Tse, TseFinalStandoff, Trajectory, k, time, gripper_state)
     """Step 6"""
     #pos_Grasp = TccFinal @ np.array([TseGrasp[0, 3], TseGrasp[1, 3], TseGrasp[2, 3], 1])
-    TseFinalGrasp = TscFinal + np.array([[0, 0, 0, TceGrasp[0, 3]], [0, 0, 0, TceGrasp[1, 3]],
-                                         [0, 0, 0, TceGrasp[2, 3]], [0, 0, 0, 0]])
+    TseFinalGrasp = TscFinal @ TceGrasp
     Tse, Trajectory = RTG_decoupled(Tse, TseFinalGrasp, Trajectory, k, time, gripper_state)
     #Tse, Trajectory = RTG_decoupled_5(Tse, TseFinalGrasp, Trajectory, k, time, gripper_state)
     """Step 7"""
@@ -172,13 +170,13 @@ TscFinal = np.array([[np.cos(FP[2]), -np.sin(FP[2]), 0, FP[0]],
                      [np.sin(FP[2]), np.cos(FP[2]), 0, FP[1]],
                      [0, 0, 1, 0.025],
                      [0, 0, 0, 1]])
-TceGrasp = np.array([[1, 0, 0, -0.05],
+TceGrasp = np.array([[0, 0, 1, 0],
                      [0, 1, 0, 0],
-                     [0, 0, 1, 0],
+                     [-1, 0, 1, 0],
                      [0, 0, 0, 1]])
-TceStandoff = np.array([[1, 0, 0, -0.05],
+TceStandoff = np.array([[0, 0, 1, 0],
                         [0, 1, 0, 0],
-                        [0, 0, 1, 0.5],
+                        [-1, 0, 0, 0.2],
                         [0, 0, 0, 1]])
 
 print("TseStandoff\n", Tsc @ TceStandoff)

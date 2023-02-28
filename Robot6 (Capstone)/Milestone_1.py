@@ -3,7 +3,7 @@ import numpy as np
 from math import atan2
 
 
-def NextState(config, var_vec, max_ang_speed=1000000, r=0.0475, l=0.235, w=0.15, delta_t=0.01):
+def NextState(config, var_vec, max_ang_speed=10000, r=0.0475, l=0.235, w=0.15, delta_t=0.01):
 
     """ - config: chassis (phi, x, y) position, full wheels and joints angles and gripper state configuration
         - var_vec: wheels and joints variation at one step"""
@@ -24,7 +24,7 @@ def NextState(config, var_vec, max_ang_speed=1000000, r=0.0475, l=0.235, w=0.15,
     F = (r / 4) * np.array([[-1 / (l + w), 1 / (l + w), 1 / (l + w), -1 / (l + w)],
                             [1, 1, 1, 1],
                             [-1, 1, -1, 1]])
-    Vb = F @ delta_theta / delta_t
+    Vb = F @ delta_theta
     Vb6 = np.zeros(6)
     for n in range(len(Vb)):
         Vb6[2 + n] = Vb[n]
