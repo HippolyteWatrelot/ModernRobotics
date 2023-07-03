@@ -11,36 +11,39 @@ def RTG_decoupled(Tse, Tgoal, Trajectory, k, time, gripper_state):
     pos_init = np.array([Tse[0, 3], Tse[1, 3], Tse[2, 3]])
     pos_final = np.array([Tgoal[0, 3], Tgoal[1, 3], Tgoal[2, 3]])
     Rse = Tse[:3, :3]
+    Rgoal = Tgoal[:3, :3]
     ps = []
     for i in range(time * k * 100):
         s = (i + 1) / (time * k * 100)
         ps = pos_init + s * (pos_final - pos_init)
-        Trajectory.append([Rse[0, 0], Rse[0, 1], Rse[0, 2],
-                           Rse[1, 0], Rse[1, 1], Rse[1, 2],
-                           Rse[2, 0], Rse[2, 1], Rse[2, 2],
+        R = Rse @ mr.MatrixExp3(mr.MatrixLog3(mr.RotInv(Rse) @ Rgoal) * s)
+        Trajectory.append([R[0, 0], R[0, 1], R[0, 2],
+                           R[1, 0], R[1, 1], R[1, 2],
+                           R[2, 0], R[2, 1], R[2, 2],
                            ps[0], ps[1], ps[2], gripper_state])
+    Tse[:3, :3] = R
     Tse[0, 3], Tse[1, 3], Tse[2, 3] = ps[0], ps[1], ps[2]
     print(Tse)
     return Tse, Trajectory
 
 def RTG_decoupled_3(Tse, Tgoal, Trajectory, k, time, gripper_state):
 
-    """When this function is called, Tse = TscStandoff.
-       No rotations here"""
-
     pos_init = np.array([Tse[0, 3], Tse[1, 3], Tse[2, 3]])
     pos_final = np.array([Tgoal[0, 3], Tgoal[1, 3], Tgoal[2, 3]])
     Rse = Tse[:3, :3]
+    Rgoal = Tgoal[:3, :3]
     ps = []
     for i in range(time * k * 100):
         T = time * k * 100
         a2, a3 = 3 / (T ** 2), -2 / (T ** 3)
         s = a2 * (i + 1) ** 2 + a3 * (i + 1) ** 3
         ps = pos_init + s * (pos_final - pos_init)
-        Trajectory.append([Rse[0, 0], Rse[0, 1], Rse[0, 2],
-                           Rse[1, 0], Rse[1, 1], Rse[1, 2],
-                           Rse[2, 0], Rse[2, 1], Rse[2, 2],
+        R = Rse @ mr.MatrixExp3(mr.MatrixLog3(mr.RotInv(Rse) @ Rgoal) * s)
+        Trajectory.append([R[0, 0], R[0, 1], R[0, 2],
+                           R[1, 0], R[1, 1], R[1, 2],
+                           R[2, 0], R[2, 1], R[2, 2],
                            ps[0], ps[1], ps[2], gripper_state])
+    Tse[:3, :3] = R
     Tse[0, 3], Tse[1, 3], Tse[2, 3] = ps[0], ps[1], ps[2]
     print(Tse)
     return Tse, Trajectory
@@ -48,22 +51,22 @@ def RTG_decoupled_3(Tse, Tgoal, Trajectory, k, time, gripper_state):
 
 def RTG_decoupled_5(Tse, Tgoal, Trajectory, k, time, gripper_state):
 
-    """When this function is called, Tse = TscStandoff.
-       No rotations here as it is called for lowering and rising end effector for grasping and ungrasping"""
-
     pos_init = np.array([Tse[0, 3], Tse[1, 3], Tse[2, 3]])
     pos_final = np.array([Tgoal[0, 3], Tgoal[1, 3], Tgoal[2, 3]])
     Rse = Tse[:3, :3]
+    Rgoal = Tgoal[:3, :3]
     ps = []
     for i in range(time * k * 100):
         T = time * k * 100
         a3, a4, a5 = 10 / (T ** 3), -15 / (T ** 4), 6 / (T ** 5)
         s = a3 * (i + 1) ** 3 + a4 * (i + 1) ** 4 + a5 * (i + 1) ** 5
         ps = pos_init + s * (pos_final - pos_init)
-        Trajectory.append([Rse[0, 0], Rse[0, 1], Rse[0, 2],
-                           Rse[1, 0], Rse[1, 1], Rse[1, 2],
-                           Rse[2, 0], Rse[2, 1], Rse[2, 2],
+        R = Rse @ mr.MatrixExp3(mr.MatrixLog3(mr.RotInv(Rse) @ Rgoal) * s)
+        Trajectory.append([R[0, 0], R[0, 1], R[0, 2],
+                           R[1, 0], R[1, 1], R[1, 2],
+                           R[2, 0], R[2, 1], R[2, 2],
                            ps[0], ps[1], ps[2], gripper_state])
+    Tse[:3, :3] = R
     Tse[0, 3], Tse[1, 3], Tse[2, 3] = ps[0], ps[1], ps[2]
     print(Tse)
     return Tse, Trajectory
@@ -98,6 +101,7 @@ def RTG_Poly3_path(Tse, Tgoal, Trajectory, k, time, gripper_state):
     Tse = Ts
 
     return Tse, Trajectory
+
 
 def RTG_Poly5_path(Tse, Tgoal, Trajectory, k, time, gripper_state):
 
