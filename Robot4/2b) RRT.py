@@ -1,229 +1,253 @@
 import numpy as np
-from math import sqrt
-from sympy.solvers import solve
-from sympy import Symbol
+from math import atan2
+from collections import OrderedDict
 import csv
-import pandas as pd
 
 
-"""I've done the RRT method here"""
+def Nearest(graph, node_key, node, no_links):
+    a = [np.sqrt(2)]
+    b = ["-1"]
+    for key in graph.keys():
+        graphnode = graph[key]
+        if node_key not in no_links[key]:
+            a.append((node[0] - graphnode[0]) ** 2 + (node[1] - graphnode[1]) ** 2)
+            b.append(key)
+    ind = np.argmin(a)
+    key = b[ind]
+    try:
+        return key, graph[key]
+    except:
+        return "-1", [0, 0]
+
+def distance(node1, node2):
+    return np.sqrt((node1[0] - node1[0])**2 + (node1[1] - node2[1])**2)
+
+def findNeighbors(graph, node_key, node, rad, obstacles, nearest_node, goal, d):
+    inRad = []
+    distances_sqr = []
+    distances_sqr_goal = []
+    copy = graph.copy()
+    del copy[node_key]
+    del copy[nearest_node]
+    keys = list(copy.keys())
+    for key in keys:
+        neighbor = graph[key]
+        distance_sqr = (node[0] - neighbor[0]) ** 2 + (node[1] - neighbor[1]) ** 2
+        distance_sqr_goal = (neighbor[0] - goal[0]) ** 2 + (neighbor[1] - goal[1]) ** 2
+        distances_sqr_goal.append(distance_sqr_goal)
+        if not contact(node, neighbor, obstacles, d) and distance_sqr <= rad ** 2:
+            #distances_sqr.append(distance_sqr)
+            inRad.append(key)
+    #best = inRad[np.argmin(distances_sqr_goal)]
+    return inRad
+
+def ChooseParent(graph, neighbor_nodes, nearest_node, new_node, obstacles, cost, delta):
+    d = distance(graph[nearest_node], graph[new_node])
+    c = cost[nearest_node] + d
+    parent = nearest_node
+    for node in neighbor_nodes:
+        x1, x2 = graph[node], graph[new_node]
+        dist = distance(x1, x2)
+        #if not contact(x1, x2, obstacles, delta) and dist < d:
+        #    parent = node
+        #    d = dist
+        if not contact(x1, x2, obstacles, delta) and cost[node] + dist < c:
+            parent = node
+            c = cost[node] + dist
+    return parent
+
+def real_x(x1, x2):
+    if x1 > 0 and x2 > 0:
+        return np.min([x1, x2])
+    elif x1 > 0 and x2 <= 0:
+        return x1
+    elif x1 <= 0 and x2 > 0:
+        return x2
+    else:
+        return None
+
+def InCylinder(node, obstacles, delta):
+    for i in range(len(obstacles)):
+        x, y = obstacles[i, :2]
+        r = obstacles[i, 2] + delta
+        if (node[0] - x) ** 2 + (node[1] - y) ** 2 < (r + delta) ** 2:
+            return True
+    return False
+
+def contact(node1, node2, obstacles, d):
+    segment = np.array(node2) - np.array(node1)
+    k = 1
+    for i in range(len(obstacles)):
+        x, y = obstacles[i, :2]
+        r = obstacles[i, 2]
+        a = np.sum(np.square(segment))
+        x1, x2 = node1[0], node2[0]
+        y1, y2 = node1[1], node2[1]
+        b = 2 * (x1 * x2 - x * x1 - x2 ** 2 + x * x2) + 2 * (
+                y1 * y2 - y * y1 - y2 ** 2 + y * y2)
+        c = x ** 2 + y ** 2 + x2 ** 2 + y2 ** 2 - 2 * x * x2 - 2 * y * y2 - r ** 2
+        delta = b ** 2 - 4 * a * c
+        if delta > 0 and a != 0:
+            x1, x2 = (-b - np.sqrt(delta)) / (2 * a), (-b + np.sqrt(delta)) / (2 * a)
+            val = real_x(x1, x2)
+            try:
+                if val < k:
+                    k = val
+                    if 0 <= k <= 1:
+                        #print("contact k: ", k)
+                        return True
+            except:
+                pass
+    return False
+
+def Build_contact_node(node1, node2, obstacles, d):
+    segment = np.array(node2) - np.array(node1)
+    k = 1
+    #node_xy = [segment[0] + node1[0], segment[1] + node1[1]]
+    node_xy = None
+    for i in range(len(obstacles)):
+        x, y = obstacles[i, :2]
+        r = obstacles[i, 2]
+        a = np.sum(np.square(segment))
+        x1, x2 = node1[0], node2[0]
+        y1, y2 = node1[1], node2[1]
+        b = 2 * (x1 * x2 - x * x1 - x2 ** 2 + x * x2) + 2 * (
+                    y1 * y2 - y * y1 - y2 ** 2 + y * y2)
+        c = x ** 2 + y ** 2 + x2 ** 2 + y2 ** 2 - 2 * x * x2 - 2 * y * y2 - (r + d) ** 2
+        delta = b ** 2 - 4 * a * c
+        if delta > 0 and a != 0:
+            X1, X2 = (-b - np.sqrt(delta)) / (2 * a), (-b + np.sqrt(delta)) / (2 * a)
+            val = real_x(X1, X2)
+            try:
+                if val < k:
+                    k = val
+                    node_xy = [x1 * k + x2 * (1 - k), y1 * k + y2 * (1 - k)]
+                    if InCylinder((node1 + node_xy) / 2, obstacles, delta):
+                        node_xy = None
+            except:
+                pass
+        elif delta > 0 and a == 0:
+            node_xy = None
+    #print("k :", k)
+    return node_xy
 
 
-
-def planner(X1, X2, file="cylinders2"):
-
-    """This is the planner function: in the case that an obstacle blocks the way from the nearest node to the sample node,
-    it returns the distance between the nearest node and the new node which (this one will be the impact node on the
-    encountered obstacle).
-    X1 and X2 are the coordinates of the candidate node (nearest node from the random node) of the graph and the
-    random node"""
-
-    F = open(file, "r")
-    ffile = F.read()
-    f = ffile.splitlines()
-    F.close()
-    tabsol = []
-    alpha = Symbol('alpha')
-    x = 1 / (1 + abs(alpha))
-    """Here some technique to keep variable x in [0, 1]"""
-    X = x * float(X1[0]) + (1 - x) * float(X2[0])
-    Y = x * float(X1[1]) + (1 - x) * float(X2[1])
-    for n in range(len(f)):
-        x1 = float(f[n].split()[0])
-        y1 = float(f[n].split()[1])
-        r1 = float(f[n].split()[2]) / 2
-        sol = solve((X - x1) ** 2 + (Y - y1) ** 2 - r1 ** 2, x)
-        if sol:
-            if "I" not in str(sol[0]):
-                tabsol.append(sol[0] * float(X1[0]) + (1 - sol[0]) * float(X1[0]))
-    absc = float(X1[0]) * np.ones(len(tabsol))
-    arg = np.argmin(np.abs(absc - tabsol))
-    minsolX = tabsol[int(arg)]
-    solX = minsolX
-    y = (minsolX - float(X2[0])) / (float(X1[0]) - float(X2[0]))
-    solY = y * float(X1[1]) + (1 - y) * float(X2[1])
-    MinimumDistance = sqrt((solX - X1[0]) ** 2 + (solY - X1[1]) ** 2)
-    """This 'Minimum Distance' corresponds to the distance separating the candidate node from the first obstacle in 
-    the direction of the random node"""
-    return MinimumDistance
-
-
-"""This RRT function will be fully described in an attached word file"""
-
-def RRT(TreeSizeMax, file1="ScatteredNodes", file2="cylinders2"):
-
-    """
-    - f corresponds to the nodes list with the coordinates for each of them.
-    - NoLinks is an array of tuples (two nodes labels) which role is to inform what are the known unlinkable nodes duo:
-      useful to not repeat the nearest node detection.
-    - path is the found path to be returned
-    - Tree is an array of arrays (these ones describing potential partial paths) describing the full tree of
-      the algorithm
-    - TreeNodes contains and adds the graph nodes during the processus
-    - positions is an array of tuples describing the positions of all the scattered nodes from file1, this array will
-      then add new collision nodes during the processus
-    - TreeSize simply indicates the current size of the tree.
-    """
-
-    positions = []
-    F = open(file1, "r")
-    f1 = F.read()
-    f = f1.splitlines()
-    F.close()
-    NoLinks = []
-    path = []
-    for i in range(len(f)):
-        positions.append((float(f[i].split()[0]), float(f[i].split()[1])))
-    print("positions", positions)
-    Tree = [[1]]
-    """Tree initialized with node 1 (start)"""
-    TreeNodes = [1]
-    """Nodes in the tree, here initialized by 1"""
-    TreeSize = 1
-    g = open(file2, "r")
-    g1 = g.read()
-    file = g1.splitlines()
-    number = len(f)                                          #this variable will be used to add the collision nodes (it is the initialized label)
-    Tab = np.arange(len(f) - 1) + 2                          #Initialized list of scattered nodes where we will randomly choose the node to "reach" (here: all nodes but the first one)
-    while TreeSize <= TreeSizeMax:
-        CandidateNodes = []                                  #The candidates tree nodes: same as tree nodes after removing some useless nodes
-        A = []                                               #It is an array which will sort the the candidates tree nodes positions from their distance to the random node
-        rd = np.random.choice(Tab)
-        for i in range(len(TreeNodes)):
-            CandidateNodes.append(TreeNodes[i])
-        for i in range(len(NoLinks)):
-            if NoLinks[i][0] == rd:
-                CandidateNodes.remove(NoLinks[i][1])
-        for i in range(len(CandidateNodes)):
-            if CandidateNodes[i] != rd:
-                Xrd = float(positions[rd - 1][0])
-                Yrd = float(positions[rd - 1][1])
-                Xi = float(positions[int(CandidateNodes[i]) - 1][0])
-                Yi = float(positions[int(CandidateNodes[i]) - 1][1])
-                A.append((CandidateNodes[i], sqrt((Xrd - Xi) ** 2 + (Yrd - Yi) ** 2)))
-        dtype = [('s', int), ('distance', float)]
-        Arr = np.array(A, dtype=dtype)
-        Arr = np.sort(Arr, order='distance')
-        NearestNode = int(Arr[0][0])
-        """NearestNode is the candidate node of the tree (the nearest node from the random node"""
-        print("NearestNode(", rd, ")=", NearestNode)
-        alpha = Symbol('alpha', real=True)
-        x = 1 / (1 + abs(alpha))
-        """Here some technique to keep variable x in [0, 1]"""
-        Xnearest = float(positions[int(NearestNode - 1)][0])
-        Ynearest = float(positions[int(NearestNode - 1)][1])
-        Xrandom = float(f[int(rd - 1)].split()[0])
-        Yrandom = float(f[int(rd - 1)].split()[1])
-        X = x * Xrandom + (1 - x) * Xnearest
-        Y = x * Yrandom + (1 - x) * Ynearest
-        obstacle = 0
-        n = 0                                                                           #indicator of obstacle: this variable will be incremented as each obstacle does not interfere in the link
-        while obstacle == 0 and n < len(file):
-            x1 = float(file[n].split()[0])
-            y1 = float(file[n].split()[1])
-            r1 = float(file[n].split()[2]) / 2
-            sol = solve((X - x1) ** 2 + (Y - y1) ** 2 - r1 ** 2, alpha)
-            if sol:
-                if "I" in str(sol[0]):                                                  #Detecting the complex solutions (We are searching for real solutions)
-                    n += 1
-            if not sol:
-                n += 1
+def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, delta=0.02):
+    nodes = allnodes.copy()
+    nodeStart = allnodes['0']
+    graphNodes = {"0": nodeStart}
+    N = len(nodes)
+    Cost = {"0": 0}
+    Parent = {key: None for key in allnodes.keys()}
+    noLinks = {str(i): [] for i in range(len(allnodes))}
+    unblocked = False
+    i = 0
+    remaining_free_nodes = allnodes.copy()
+    del remaining_free_nodes["0"]
+    goal = allnodes["goal"]
+    test = False
+    while Parent["goal"] is None and i < n-1:
+        #print("iteration: ", i, Parent)
+        if not list(remaining_free_nodes.keys()):
+            print("Failure: Goal has not been reach")
+            print(Parent)
+            return False
+        node = np.random.choice(list(remaining_free_nodes.keys()))
+        nearest_node, nearest_xy = None, None
+        nds = remaining_free_nodes.copy()
+        #print(graphNodes)
+        while not unblocked:
+            nearest_node, nearest_xy = Nearest(graphNodes, node, nodes[node], noLinks)
+            if nearest_node != "-1":
+                unblocked = True
             else:
-                if "I" not in str(sol[0]):
-                    obstacle = 1
-                    NoLinks.append((rd, NearestNode))
-                    print("PAF !")
-                    """Simple indication of a collision"""
-                    number += 1
-                    dist = sqrt((Xrandom - Xnearest) ** 2 + (Yrandom - Ynearest) ** 2)
-                    Xnew = Xnearest + planner([Xnearest, Ynearest], [Xrandom, Yrandom]) * (Xrandom - Xnearest) / dist
-                    Ynew = Ynearest + planner([Xnearest, Ynearest], [Xrandom, Yrandom]) * (Yrandom - Ynearest) / dist
-                    """New coordinates of the added node on the graph when it has been created after a collision"""
-                    TreeNodes.append(number)
-                    NoLinks.append((rd, number))
-                    positions.append((Xnew, Ynew))
-                    for cell in range(len(Tree)):
-                        T = []
-                        T1 = []
-                        for i in range(len(Tree[cell])):
-                            T.append(Tree[cell][i])
-                            T1.append(Tree[cell][i])
-                        if NearestNode in Tree[cell]:
-                            n = 0
-                            while NearestNode != int(Tree[cell][n]):
-                                n += 1
-                            if len(Tree[cell]) >= int(n + 2):
-                                del T[n + 1:]
-                                T.insert(int(n + 1), int(number))
-                                if T not in Tree:
-                                    Tree.append(T)
-                            else:
-                                T1.insert(int(n + 1), int(number))
-                                Tree[cell] = T1
-                    TreeSize += 1
-                    if (Xnew - float(f[-1].split()[0])) ** 2 + (Ynew - float(f[-1].split()[1])) ** 2 <= 0.04:
-                        """When this created node is near enough from the goal"""
-                        print("Final Tree", Tree)
-                        for i in range(len(Tree)):
-                            if int(Tree[i][-1]) == number:
-                                path = Tree[i]
-                        pos = []
-                        for j in range(len(path)):
-                            pos.append(positions[int(path[j] - 1)])
-                        print("SUCCESS !", path, pos)
-                        return path, pos
-        if n == len(file):
-            """Then we know that random node and nearest node are linkable. No obstacle encountered"""
-            TreeNodes.append(rd)
-            Tab = np.delete(Tab, np.where(Tab == int(rd)))
-            for cell in range(len(Tree)):
-                T = []
-                T1 = []
-                for i in range(len(Tree[cell])):
-                    T.append(Tree[cell][i])
-                    T1.append(Tree[cell][i])
-                if NearestNode in Tree[cell]:
-                    n = 0
-                    while NearestNode != int(Tree[cell][n]):
-                        n += 1
-                    if len(Tree[cell]) >= int(n + 2):
-                        del T[n + 1:]
-                        T.insert(int(n + 1), int(rd))
-                        if T not in Tree:
-                            Tree.append(T)
-                    else:
-                        T1.insert(int(n + 1), int(rd))
-                        Tree[cell] = T1
-            TreeSize += 1
-            if rd == len(f):
-                print("Final Tree", Tree)
-                for i in range(len(Tree)):
-                    if int(Tree[i][-1]) == len(f):
-                        path = Tree[i]
-                pos = []                                                     #The different positions of the found path
-                for j in range(len(path)):
-                    pos.append(positions[int(path[j] - 1)])
-                print("SUCCESS !", path, pos)
-                return path, pos
-    print("FAILURE !", Tree)
-    return None
+                del nds[node]
+                node = np.random.choice(list(nds.keys()))
+        unblocked = False
+        #print(i, nearest_node)
+        if (nodes[node][0] - nearest_xy[0]) ** 2 + (nodes[node][1] - nearest_xy[1]) ** 2 >= stepsize ** 2:
+            new_node = str(N)
+            test = True
+            angle = atan2(nodes[node][1] - nearest_xy[1], nodes[node][0] - nearest_xy[0])
+            new_xy = [nearest_xy[0] + stepsize * np.cos(angle), nearest_xy[1] + stepsize * np.sin(angle)]
+            nodes[new_node] = new_xy
+            assert new_node != nearest_node
+        else:
+            new_node = node
+            new_xy = nodes[node]
+            assert new_node != nearest_node
+        #Cost[new_node] = Cost[nearest_node] + distance(nodes[new_node], nearest_xy)      # worst
+        if contact(nodes[nearest_node], nodes[new_node], obstacles, delta):
+            new_xy = Build_contact_node(nodes[nearest_node], nodes[new_node], obstacles, delta)
+            new_node = str(N)
+            test = True
+            assert new_node != nearest_node
+            if new_xy is not None:
+                nodes[new_node] = new_xy
+            else:
+                del nodes[new_node]
+        if InCylinder(new_xy, obstacles, delta):          # elif ?
+            new_xy = None
+        if test:
+            N += 1
+            test = False
+        if new_xy is not None:
+            graphNodes[new_node] = new_xy                                                # <------------- graph growth
+            noLinks[nearest_node].append(new_node)                                       # <------------- then deleting free node
+            noLinks[new_node] = []
+            near_nodes = findNeighbors(graphNodes, new_node, new_xy, rad, obstacles, nearest_node, goal, delta)
+            parent = ChooseParent(graphNodes, near_nodes, nearest_node, new_node, obstacles, Cost, delta)
+            Parent[new_node] = parent
+            Cost[new_node] = Cost[parent] + distance(graphNodes[new_node], graphNodes[parent])
+            try:
+                del remaining_free_nodes[new_node]
+            except:
+                pass
+            #print(Parent)
+        i += 1
+    if Parent["goal"] is None:
+        print("Failure !")
+        return False
+    else:
+        print("SUCCESS !")
+        value = "goal"
+        inverse_path = {"goal": nodes["goal"]}
+        while value != "0":
+            value = Parent[value]
+            inverse_path[value] = nodes[value]
+        path = OrderedDict(reversed(list(inverse_path.items())))
+        print(path)
+        with open('nodes.csv', 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows([path[key] for key in path.keys()])
+        return True
 
 
-#print(RRT(30))
+if __name__ == "__main__":
 
-rrt = RRT(50)
-path = rrt[0]
-positions = rrt[1]
+    F = open("cylinders", "r")
+    ffile = F.read()
+    elts = ffile.splitlines()
+    F.close()
 
-positionsX = []
-positionsY = []
-for i in range(len(path)):
-    positionsX.append(float(positions[i][0]))
-    positionsY.append(float(positions[i][1]))
-with open('LabelledPathRRT.csv', 'w', newline='') as file1:
-    writer1 = csv.writer(file1)
-    writer1.writerow([path[i] for i in range(len(path))])
-with open('RRTpath.csv', 'w', newline='') as file2:
-    writer = csv.writer(file2)
-    for i in range(len(path)):
-        writer.writerow([float(positionsX[i]), float(positionsY[i]), 0])
+    obstacles = np.empty([len(elts), 3])
+    for j in range(len(obstacles)):
+        x = float(elts[j].split()[0])
+        y = float(elts[j].split()[1])
+        r = float(elts[j].split()[2]) / 2
+        obstacles[j, :] = [x, y, r]
+    #print(obstacles)
+
+    G = open("ScatteredNodes", "r")
+    gfile = G.read()
+    elts = gfile.splitlines()
+    G.close()
+    nodes = {}
+    for j in range(len(elts) - 1):
+        x = float(elts[j].split()[0])
+        y = float(elts[j].split()[1])
+        nodes[str(j)] = [x, y]
+    nodes["goal"] = [float(elts[-1].split()[0]), float(elts[-1].split()[1])]
+    #print(nodes)
+
+    RRTstar(nodes, obstacles, n=5000, rad=0.1, stepsize=0.05)
