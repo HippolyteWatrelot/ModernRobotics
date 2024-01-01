@@ -105,6 +105,7 @@ def Build_contact_node(node1, node2, obstacles, d):
     k = 1
     #node_xy = [segment[0] + node1[0], segment[1] + node1[1]]
     node_xy = None
+    nodes_xy = []
     for i in range(len(obstacles)):
         x, y = obstacles[i, :2]
         r = obstacles[i, 2]
@@ -124,12 +125,18 @@ def Build_contact_node(node1, node2, obstacles, d):
                     node_xy = [x1 * k + x2 * (1 - k), y1 * k + y2 * (1 - k)]
                     if InCylinder((node1 + node_xy) / 2, obstacles, delta):
                         node_xy = None
+                    else:
+                        nodes_xy.append(node_xy)
             except:
                 pass
         elif delta > 0 and a == 0:
             node_xy = None
     #print("k :", k)
-    return node_xy
+    if len(nodes_xy) != 0:
+        dists = [(nd[0] - node1[0])**2 + (nd[0] - node1[0])**2 for nd in nodes_xy]
+        return nodes_xy[np.argmin(dists)]
+    else:
+        return node_xy
 
 
 def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, delta=0.02):
