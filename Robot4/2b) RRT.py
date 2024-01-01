@@ -123,10 +123,11 @@ def Build_contact_node(node1, node2, obstacles, d):
                 if val < k:
                     k = val
                     node_xy = [x1 * k + x2 * (1 - k), y1 * k + y2 * (1 - k)]
-                    if InCylinder((node1 + node_xy) / 2, obstacles, delta):
-                        node_xy = None
-                    else:
-                        nodes_xy.append(node_xy)
+                    nodes_xy.append(node_xy)
+                    #if InCylinder((node1 + node_xy) / 2, obstacles, delta):
+                    #    node_xy = None
+                    #else:
+                    #    nodes_xy.append(node_xy)
             except:
                 pass
         elif delta > 0 and a == 0:
