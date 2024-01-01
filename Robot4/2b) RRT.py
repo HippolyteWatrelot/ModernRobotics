@@ -5,7 +5,7 @@ import csv
 
 
 def Nearest(graph, node_key, node, no_links):
-    a = [np.sqrt(2)]
+    a = [2]
     b = ["-1"]
     for key in graph.keys():
         graphnode = graph[key]
@@ -165,11 +165,15 @@ def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, delta=0.02):
                 node = np.random.choice(list(nds.keys()))
         unblocked = False
         #print(i, nearest_node)
-        if (nodes[node][0] - nearest_xy[0]) ** 2 + (nodes[node][1] - nearest_xy[1]) ** 2 >= stepsize ** 2:
+        squared_norm = (nodes[node][0] - nearest_xy[0]) ** 2 + (nodes[node][1] - nearest_xy[1]) ** 2
+        if squared_norm >= stepsize ** 2:
             new_node = str(N)
             test = True
-            angle = atan2(nodes[node][1] - nearest_xy[1], nodes[node][0] - nearest_xy[0])
-            new_xy = [nearest_xy[0] + stepsize * np.cos(angle), nearest_xy[1] + stepsize * np.sin(angle)]
+            #angle = atan2(nodes[node][1] - nearest_xy[1], nodes[node][0] - nearest_xy[0])
+            #new_xy = [nearest_xy[0] + stepsize * np.cos(angle), nearest_xy[1] + stepsize * np.sin(angle)]
+            norm = np.sqrt(squared_norm)
+            new_xy = [nearest_xy[0] + stepsize * (nodes[node][0] - nearest_xy[0]) / norm, nearest_xy[1] +
+                      stepsize * (nodes[node][1] - nearest_xy[1]) / norm]
             nodes[new_node] = new_xy
             assert new_node != nearest_node
         else:
