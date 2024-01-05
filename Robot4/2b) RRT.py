@@ -79,7 +79,7 @@ def contact(node1, node2, obstacles, d):
     k = 1
     for i in range(len(obstacles)):
         x, y = obstacles[i, :2]
-        r = obstacles[i, 2]
+        r = obstacles[i, 2] + d
         a = np.sum(np.square(segment))
         x1, x2 = node1[0], node2[0]
         y1, y2 = node1[1], node2[1]
@@ -91,11 +91,8 @@ def contact(node1, node2, obstacles, d):
             x1, x2 = (-b - np.sqrt(delta)) / (2 * a), (-b + np.sqrt(delta)) / (2 * a)
             val = real_x(x1, x2)
             try:
-                if val < k:
-                    k = val
-                    if 0 <= k <= 1:
-                        #print("contact k: ", k)
-                        return True
+                if 0 < val < 1:
+                    return True
             except:
                 pass
     return False
@@ -103,9 +100,7 @@ def contact(node1, node2, obstacles, d):
 def Build_contact_node(node1, node2, obstacles, d):
     segment = np.array(node2) - np.array(node1)
     k = 1
-    #node_xy = [segment[0] + node1[0], segment[1] + node1[1]]
     node_xy = None
-    nodes_xy = []
     for i in range(len(obstacles)):
         x, y = obstacles[i, :2]
         r = obstacles[i, 2]
@@ -123,21 +118,11 @@ def Build_contact_node(node1, node2, obstacles, d):
                 if val < k:
                     k = val
                     node_xy = [x1 * k + x2 * (1 - k), y1 * k + y2 * (1 - k)]
-                    nodes_xy.append(node_xy)
-                    #if InCylinder((node1 + node_xy) / 2, obstacles, delta):
-                    #    node_xy = None
-                    #else:
-                    #    nodes_xy.append(node_xy)
             except:
                 pass
         elif delta > 0 and a == 0:
-            node_xy = None
-    #print("k :", k)
-    if len(nodes_xy) != 0:
-        dists = [(nd[0] - node1[0])**2 + (nd[0] - node1[0])**2 for nd in nodes_xy]
-        return nodes_xy[np.argmin(dists)]
-    else:
-        return node_xy
+            pass
+    return node_xy
 
 
 def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, delta=0.02):
@@ -177,36 +162,41 @@ def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, delta=0.02):
         if squared_norm >= stepsize ** 2:
             new_node = str(N)
             test = True
-            #angle = atan2(nodes[node][1] - nearest_xy[1], nodes[node][0] - nearest_xy[0])
-            #new_xy = [nearest_xy[0] + stepsize * np.cos(angle), nearest_xy[1] + stepsize * np.sin(angle)]
             norm = np.sqrt(squared_norm)
             new_xy = [nearest_xy[0] + stepsize * (nodes[node][0] - nearest_xy[0]) / norm, nearest_xy[1] +
                       stepsize * (nodes[node][1] - nearest_xy[1]) / norm]
             nodes[new_node] = new_xy
-            assert new_node != nearest_node
+            noLinks[new_node] = []
+            #assert new_node != nearest_node
         else:
             new_node = node
             new_xy = nodes[node]
-            assert new_node != nearest_node
+            #assert new_node != nearest_node
         #Cost[new_node] = Cost[nearest_node] + distance(nodes[new_node], nearest_xy)      # worst
         if contact(nodes[nearest_node], nodes[new_node], obstacles, delta):
             new_xy = Build_contact_node(nodes[nearest_node], nodes[new_node], obstacles, delta)
+            noLinks[nearest_node].append(node)
             new_node = str(N)
             test = True
-            assert new_node != nearest_node
+            #assert new_node != nearest_node
             if new_xy is not None:
-                nodes[new_node] = new_xy
+                if InCylinder(new_xy, obstacles, delta):  # elif ?
+                    new_xy = None
+                else:
+                    nodes[new_node] = new_xy  # new node in then added to the graph
+                    noLinks[new_node] = [node]
             else:
-                del nodes[new_node]
-        if InCylinder(new_xy, obstacles, delta):          # elif ?
-            new_xy = None
+                try:
+                    del nodes[new_node]
+                except:
+                    pass
         if test:
             N += 1
             test = False
         if new_xy is not None:
-            graphNodes[new_node] = new_xy                                                # <------------- graph growth
-            noLinks[nearest_node].append(new_node)                                       # <------------- then deleting free node
-            noLinks[new_node] = []
+            graphNodes[new_node] = new_xy                                        # <-------------
+            if new_node == node:
+                noLinks[node] = []
             near_nodes = findNeighbors(graphNodes, new_node, new_xy, rad, obstacles, nearest_node, goal, delta)
             parent = ChooseParent(graphNodes, near_nodes, nearest_node, new_node, obstacles, Cost, delta)
             Parent[new_node] = parent
