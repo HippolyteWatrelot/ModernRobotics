@@ -96,8 +96,8 @@ def contact(node1, node2, obstacles, d, limit=False):
                 pass
     return False
 
-def Build_contact_node(node1, node2, obstacles, d, D):
-    if inRing(node1, obstacles, d, D):
+def Build_contact_node(node1, node2, obstacles, mcd, D):
+    if InCylinder(node1, obstacles, D):
         # No building contact node if graphnode is in a ring
         return None
     segment = np.array(node2) - np.array(node1)
@@ -124,7 +124,7 @@ def Build_contact_node(node1, node2, obstacles, d, D):
                 pass
         elif delta > 0 and a == 0:
             pass
-    if node_xy == node1:
+    if node_xy is not None and np.sqrt((node_xy[0] - node1[0]) ** 2 + (node_xy[1] - node1[1]) ** 2) < mcd:
         return None
     else:
         # node1 can be in a ring "[r + d/2  -  r + d]" => node_xy might be None
@@ -132,16 +132,16 @@ def Build_contact_node(node1, node2, obstacles, d, D):
         return node_xy
 
 
-def inRing(node, obstacles, d, D):
-    for i in range(len(obstacles)):
-        x, y = obstacles[i, :2]
-        r = obstacles[i, 2]
-        if (r + d) ** 2 < (node[0] - x) ** 2 + (node[1] - y) ** 2 < (r + D) ** 2:
-            return True
-    return False
+#def inRing(node, obstacles, d, D):
+#    for i in range(len(obstacles)):
+#        x, y = obstacles[i, :2]
+#        r = obstacles[i, 2]
+#        if (r + d) ** 2 < (node[0] - x) ** 2 + (node[1] - y) ** 2 < (r + D) ** 2:
+#            return True
+#    return False
 
 
-def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, delta=0.045, Delta=0.05):
+def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, mcd=0.0005, delta=0.045, Delta=0.05):
     nodes = allnodes.copy()
     nodeStart = allnodes['0']
     graphNodes = {"0": nodeStart}
@@ -190,7 +190,7 @@ def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, delta=0.045, De
             #assert new_node != nearest_node
         #Cost[new_node] = Cost[nearest_node] + distance(nodes[new_node], nearest_xy)      # worst
         if contact(nodes[nearest_node], nodes[new_node], obstacles, delta):
-            new_xy = Build_contact_node(nodes[nearest_node], nodes[new_node], obstacles, delta, Delta)
+            new_xy = Build_contact_node(nodes[nearest_node], nodes[new_node], obstacles, mcd, Delta)
             noLinks[nearest_node].append(node)
             new_node = str(N)
             test = True
