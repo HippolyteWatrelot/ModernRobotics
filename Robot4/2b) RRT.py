@@ -157,6 +157,7 @@ def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, mcd=0.0005, del
     test = False
     while Parent["goal"] is None and i < n-1:
         #print("iteration: ", i, Parent)
+        flag = False
         if not list(remaining_free_nodes.keys()):
             print("Failure: Goal has not been reach")
             print(Parent)
@@ -178,19 +179,17 @@ def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, mcd=0.0005, del
         if squared_norm >= stepsize ** 2:
             new_node = str(N)
             test = True
+            flag = True
             norm = np.sqrt(squared_norm)
             new_xy = [nearest_xy[0] + stepsize * (nodes[node][0] - nearest_xy[0]) / norm, nearest_xy[1] +
                       stepsize * (nodes[node][1] - nearest_xy[1]) / norm]
-            nodes[new_node] = new_xy
-            noLinks[new_node] = []
-            #assert new_node != nearest_node
         else:
             new_node = node
             new_xy = nodes[node]
             #assert new_node != nearest_node
         #Cost[new_node] = Cost[nearest_node] + distance(nodes[new_node], nearest_xy)      # worst
-        if contact(nodes[nearest_node], nodes[new_node], obstacles, delta):
-            new_xy = Build_contact_node(nodes[nearest_node], nodes[new_node], obstacles, mcd, Delta)
+        if contact(nodes[nearest_node], new_xy, obstacles, delta):
+            new_xy = Build_contact_node(nodes[nearest_node], new_xy, obstacles, mcd, Delta)
             noLinks[nearest_node].append(node)
             new_node = str(N)
             test = True
@@ -198,14 +197,17 @@ def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, mcd=0.0005, del
             if new_xy is not None:
                 if InCylinder(new_xy, obstacles, Delta):  # elif ?
                     new_xy = None
+                    test = False
                 else:
+                    '''Inserting contact node'''
                     nodes[new_node] = new_xy  # new node in then added to the graph
                     noLinks[new_node] = [node]
             else:
-                try:
-                    del nodes[new_node]
-                except:
-                    pass
+                test = False
+        elif flag:
+            '''Inserting limit node with no contact'''
+            nodes[new_node] = new_xy
+            noLinks[new_node] = []
         if test:
             N += 1
             test = False
