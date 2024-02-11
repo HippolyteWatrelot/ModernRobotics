@@ -78,7 +78,7 @@ def contact(node1, node2, obstacles, d, limit=False):
     segment = np.array(node2) - np.array(node1)
     for i in range(len(obstacles)):
         x, y = obstacles[i, :2]
-        r = obstacles[i, 2] + d/2
+        r = obstacles[i, 2] + d
         a = np.sum(np.square(segment))
         x1, x2 = node1[0], node2[0]
         y1, y2 = node1[1], node2[1]
@@ -96,10 +96,11 @@ def contact(node1, node2, obstacles, d, limit=False):
                 pass
     return False
 
-def Build_contact_node(node1, node2, obstacles, mcd, D):
+def Build_contact_node(node1, node2, obstacles, mcd, D, epsilon):
     if InCylinder(node1, obstacles, D):
         # No building contact node if graphnode is in a ring
         return None
+    #assert not InCylinder(node1, obstacles, D)
     segment = np.array(node2) - np.array(node1)
     k = 1
     node_xy = None
@@ -109,39 +110,37 @@ def Build_contact_node(node1, node2, obstacles, mcd, D):
         a = np.sum(np.square(segment))
         x1, x2 = node1[0], node2[0]
         y1, y2 = node1[1], node2[1]
-        b = 2 * (x1 * x2 - x * x1 - x2 ** 2 + x * x2) + 2 * (
-                    y1 * y2 - y * y1 - y2 ** 2 + y * y2)
-        c = x ** 2 + y ** 2 + x2 ** 2 + y2 ** 2 - 2 * x * x2 - 2 * y * y2 - r ** 2
+        b = 2 * (x1 - x) * (x2 - x1) + 2 * (y1 - y) * (y2 - y1)
+        c = x ** 2 + y ** 2 + x1 ** 2 + y1 ** 2 - 2 * x * x1 - 2 * y * y1 - r ** 2
         delta = b ** 2 - 4 * a * c
         if delta > 0 and a != 0:
             X1, X2 = (-b - np.sqrt(delta)) / (2 * a), (-b + np.sqrt(delta)) / (2 * a)
             val = real_x(X1, X2)
             try:
-                if val < k:
+                if val is not None and val < k:
                     k = val
                     node_xy = [x1 * (1 - k) + x2 * k, y1 * (1 - k) + y2 * k]
+                    #print(np.sqrt((node_xy[0] - x) ** 2 + (node_xy[1] - y) ** 2))    # must be D with imprecision
             except:
                 pass
         elif delta > 0 and a == 0:
             pass
-    if node_xy is not None and np.sqrt((node_xy[0] - node1[0]) ** 2 + (node_xy[1] - node1[1]) ** 2) < mcd:
-        return None
+    dist = np.sqrt((node_xy[0] - node1[0]) ** 2 + (node_xy[1] - node1[1]) ** 2)
+    if node_xy is not None:
+        dist = np.sqrt((node_xy[0] - node1[0]) ** 2 + (node_xy[1] - node1[1]) ** 2)
+        if dist < mcd:
+            return None
     else:
         # node1 can be in a ring "[r + d/2  -  r + d]" => node_xy might be None
         #assert np.prod([int((node_xy[0] - obstacles[i, 0]) ** 2 + (node_xy[1] - obstacles[i, 1]) ** 2 >= (obstacles[i, 2] + d) ** 2) for i in range(len(obstacles))]) == 1
+        if node_xy is not None and epsilon < dist:
+            for i in range(2):
+                node_xy[i] -= epsilon * (node_xy[i] - node1[i]) / dist
+            #assert not InCylinder(node_xy, obstacles, D)
         return node_xy
 
 
-#def inRing(node, obstacles, d, D):
-#    for i in range(len(obstacles)):
-#        x, y = obstacles[i, :2]
-#        r = obstacles[i, 2]
-#        if (r + d) ** 2 < (node[0] - x) ** 2 + (node[1] - y) ** 2 < (r + D) ** 2:
-#            return True
-#    return False
-
-
-def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, mcd=0.0005, delta=0.045, Delta=0.05):
+def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.05, mcd=0.0005, delta=0.035, Delta=0.04, epsilon=0.001):
     nodes = allnodes.copy()
     nodeStart = allnodes['0']
     graphNodes = {"0": nodeStart}
@@ -189,19 +188,20 @@ def RRTstar(allnodes, obstacles, n=100, rad=0.1, stepsize=0.001, mcd=0.0005, del
             #assert new_node != nearest_node
         #Cost[new_node] = Cost[nearest_node] + distance(nodes[new_node], nearest_xy)      # worst
         if contact(nodes[nearest_node], new_xy, obstacles, delta):
-            new_xy = Build_contact_node(nodes[nearest_node], new_xy, obstacles, mcd, Delta)
+            new_xy = Build_contact_node(nodes[nearest_node], new_xy, obstacles, mcd, Delta, epsilon)
             noLinks[nearest_node].append(node)
             new_node = str(N)
             test = True
             #assert new_node != nearest_node
             if new_xy is not None:
-                if InCylinder(new_xy, obstacles, Delta):  # elif ?
-                    new_xy = None
-                    test = False
-                else:
-                    '''Inserting contact node'''
-                    nodes[new_node] = new_xy  # new node in then added to the graph
-                    noLinks[new_node] = [node]
+                #if InCylinder(new_xy, obstacles, Delta):  # elif ?
+                #    assert not InCylinder(new_xy, obstacles, delta)
+                #    new_xy = None
+                #    test = False
+                #else:
+                '''Inserting contact node'''
+                nodes[new_node] = new_xy  # new node in then added to the graph
+                noLinks[new_node] = [node]
             else:
                 test = False
         elif flag:
